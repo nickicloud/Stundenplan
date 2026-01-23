@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stunden-Tracker</title>
+  <style>
+    :root{
+      --bg: #0b1220;
+      --panel: rgba(255,255,255,0.06);
+      --panel-strong: rgba(255,255,255,0.12);
+      --text: #e6eaf2;
+      --muted: #b7c0d6;
+      --accent: #7c9cff;
+      --good: #2ecc71;
+      --bad: #ff6b6b;
+      --warn: #ffb347;
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+      --radius: 18px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      color:var(--text); background: radial-gradient(1200px 800px at 10% -10%, #18243d 0%, #0b1220 60% 100%);
+    }
+    header{
+      position:sticky; top:0; z-index:5; backdrop-filter: blur(10px);
+      background: linear-gradient(180deg, rgba(11,18,32,0.9), rgba(11,18,32,0.4));
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .wrap{max-width:1200px; margin:0 auto; padding:16px;}
+    .toolbar{display:flex; align-items:center; gap:12px; justify-content:space-between}
+    .left, .right{display:flex; align-items:center; gap:8px}
+    .title{font-weight:700; letter-spacing:.3px}
+    .btn{appearance:none; border:0; border-radius:14px; padding:10px 14px; color:var(--text); background:var(--panel);
+      box-shadow: var(--shadow); cursor:pointer; transition:.2s transform, .2s background; display:inline-flex; align-items:center; gap:8px}
+    .btn:hover{transform: translateY(-1px); background:var(--panel-strong)}
+    .btn:active{transform: translateY(0)}
+    .icon{font: 16px/1.2 "Segoe UI Symbol"}
+    .dateBtn{font-weight:600}
+    .toggle{
+      display:inline-flex; align-items:center; gap:10px; padding:6px; border-radius:999px; background:var(--panel); box-shadow:var(--shadow)
+    }
+    .toggle input{display:none}
+    .pill{
+      width:46px; height:26px; background:#334; border-radius:999px; position:relative; transition:.25s background
+    }
+    .knob{position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:white; transition:.25s left}
+    input:checked + .pill{background:var(--accent)}
+    input:checked + .pill .knob{left:23px}
+
+    /* Grid */
+    .grid{
+      margin:24px auto; max-width:1200px; border-radius:var(--radius); overflow:hidden; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08)
+    }
+    .gridHead, .gridRow{display:grid; grid-template-columns: 80px repeat(5, 1fr);}
+    .gridHead{background:rgba(255,255,255,0.06); position:sticky; top:74px; z-index:2}
+    .cell{padding:12px; border-bottom:1px dashed rgba(255,255,255,0.06)}
+    .headCell{padding:14px 12px; font-weight:700; color:var(--muted); border-right:1px dashed rgba(255,255,255,0.08)}
+    .period{font-weight:700; color:var(--muted)}
+    .lesson{
+      position:relative; border-radius:14px; padding:10px; min-height:60px; background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.04));
+      border:1px solid rgba(255,255,255,0.1); cursor:pointer; transition: .2s transform, .2s background, .2s box-shadow;
+    }
+    .lesson:hover{transform: translateY(-2px); box-shadow: var(--shadow)}
+    .lesson[disabled]{opacity:.4; pointer-events:none}
+    .summary{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:14px}
+    .dot{width:10px; height:10px; border-radius:50%; background:#8892b0; flex:none; box-shadow:0 0 0 2px rgba(255,255,255,0.12) inset}
+    .badge{font-size:12px; padding:3px 8px; border-radius:999px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12)}
+
+    /* Detail panel (morph-like effect) */
+    dialog{border:0; padding:0; background:transparent}
+    .backdrop{position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter: blur(6px);}
+    .card{
+      position:fixed; left:50%; top:50%; transform: translate(-50%,-50%) scale(.98);
+      width:min(760px, 92vw); border-radius:24px; background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05));
+      border:1px solid rgba(255,255,255,0.18); box-shadow: var(--shadow);
+      transition:.25s transform ease, .25s opacity ease; opacity:0
+    }
+    dialog[open] .card{opacity:1; transform: translate(-50%,-50%) scale(1)}
+    .cardHdr{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; border-bottom:1px solid rgba(255,255,255,0.1)}
+    .cardBody{padding:18px; display:grid; gap:14px}
+    .row{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
+    label{font-size:12px; color:var(--muted)}
+    input[type="text"], textarea, select{
+      width:100%; padding:12px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.14);
+      background:rgba(13,20,36,0.6); color:var(--text); outline:none;
+    }
+    textarea{min-height:96px; resize:vertical}
+    .rangeWrap{display:flex; align-items:center; gap:8px}
+    input[type="range"]{width:100%}
+    .split{display:flex; align-items:center; gap:10px}
+    .tag{padding:6px 10px; border-radius:999px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.06); font-size:12px}
+
+    .footer{display:flex; justify-content:space-between; padding:14px 18px; border-top:1px solid rgba(255,255,255,0.1)}
+    .ghost{background:transparent; border:1px solid rgba(255,255,255,0.18)}
+
+    /* Week picker */
+    .weekModal .cardBody{gap:18px}
+    .weekGrid{display:grid; grid-template-columns: repeat(4, 1fr); gap:10px}
+    .weekItem{padding:10px 12px; border-radius:12px; background:var(--panel); text-align:center; cursor:pointer; border:1px solid rgba(255,255,255,0.12)}
+    .weekItem.active{outline:2px solid var(--accent)}
+
+    .legend{display:flex; gap:10px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:12px}
+    .legend .sw{width:12px; height:12px; border-radius:3px; display:inline-block; margin-right:6px}
+
+    /* Small */
+    @media (max-width: 840px){
+      .gridHead, .gridRow{grid-template-columns: 60px repeat(5, 1fr)}
+      .row{grid-template-columns:1fr}
+      .toolbar{flex-wrap:wrap; gap:10px}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="toolbar">
+        <div class="left">
+          <button id="prevWeek" class="btn" title="Vorige Woche"><span class="icon">◀</span></button>
+          <button id="dateBtn" class="btn dateBtn" title="Woche wählen">—</button>
+          <button id="nextWeek" class="btn" title="Nächste Woche"><span class="icon">▶</span></button>
+        </div>
+        <div class="right">
+          <div class="legend">
+            <span><span class="sw" style="background: var(--good)"></span>gut</span>
+            <span><span class="sw" style="background: var(--warn)"></span>okay</span>
+            <span><span class="sw" style="background: var(--bad)"></span>schwierig</span>
+          </div>
+          <label class="toggle" title="Admin-Modus umschalten">
+            <span>Admin</span>
+            <input id="adminToggle" type="checkbox" />
+            <span class="pill"><span class="knob"></span></span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="grid" class="grid"></div>
+  </main>
+
+  <!-- Detail / Edit dialog -->
+  <dialog id="detail">
+    <div class="backdrop" data-close></div>
+    <div class="card">
+      <div class="cardHdr">
+        <div id="detailTitle" class="title"></div>
+        <div class="split">
+          <span id="viewBadge" class="badge">Ansicht</span>
+          <button class="btn ghost" data-close>Schließen</button>
+        </div>
+      </div>
+      <div class="cardBody">
+        <div class="row">
+          <div>
+            <label>Was hat gut geklappt?</label>
+            <input id="inpGood" type="text" placeholder="z.B. Gruppenarbeit, Konzentration…" />
+          </div>
+          <div>
+            <label>Was war schwierig?</label>
+            <input id="inpBad" type="text" placeholder="z.B. Zeitmanagement…" />
+          </div>
+        </div>
+        <div>
+          <label>Kommentar</label>
+          <textarea id="inpComment" placeholder="Gedanken zur Stunde…"></textarea>
+        </div>
+        <div class="row">
+          <div>
+            <label>Stimmungswert</label>
+            <div class="rangeWrap">
+              <span class="badge">😕</span>
+              <input id="inpMood" type="range" min="0" max="100" step="1" />
+              <span class="badge">😄</span>
+            </div>
+          </div>
+          <div>
+            <label>Farbe markieren</label>
+            <input id="inpColor" type="color" value="#7c9cff" />
+          </div>
+        </div>
+        <div class="split">
+          <label class="tag"><input id="inpDisabled" type="checkbox" /> Tag/Slot deaktivieren</label>
+        </div>
+      </div>
+      <div class="footer">
+        <button class="btn ghost" data-close>Abbrechen</button>
+        <div class="split">
+          <button id="btnDelete" class="btn" style="background: rgba(255,0,0,0.15); border:1px solid rgba(255,0,0,0.35)">Eintrag löschen</button>
+          <button id="btnSave" class="btn" style="background: var(--accent)">Speichern</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Week picker dialog -->
+  <dialog id="weekPicker" class="weekModal">
+    <div class="backdrop" data-close></div>
+    <div class="card">
+      <div class="cardHdr">
+        <div class="title">Woche auswählen</div>
+        <button class="btn ghost" data-close>Schließen</button>
+      </div>
+      <div class="cardBody">
+        <div class="row">
+          <div>
+            <label>Per Kalenderwoche</label>
+            <div class="split">
+              <select id="wkYear"></select>
+              <select id="wkNumber"></select>
+              <button id="wkGo" class="btn">Öffnen</button>
+            </div>
+          </div>
+          <div>
+            <label>Schnellauswahl (letzte/kommende Wochen)</label>
+            <div class="weekGrid" id="quickWeeks"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <template id="gridTpl">
+    <div class="gridHead">
+      <div class="headCell"></div>
+      <div class="headCell">Montag</div>
+      <div class="headCell">Dienstag</div>
+      <div class="headCell">Mittwoch</div>
+      <div class="headCell">Donnerstag</div>
+      <div class="headCell">Freitag</div>
+    </div>
+    <div class="gridBody"></div>
+  </template>
+
+  <script>
+  // ===== Utilities for dates & ISO weeks (Mon-based) =====
+  function startOfISOWeek(d){
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const day = (date.getUTCDay()+6)%7; // 0..6 (Mon..Sun)
+    date.setUTCDate(date.getUTCDate()-day);
+    return date;
+  }
+  function addDaysUTC(date, days){ const d = new Date(date); d.setUTCDate(d.getUTCDate()+days); return d; }
+  function addWeeks(date, w){ const d = new Date(date); d.setUTCDate(d.getUTCDate()+w*7); return d; }
+  function formatRange(mon){
+    const sun = addDaysUTC(mon,6);
+    const fmt = (x)=>x.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'});
+    return `${fmt(mon)} – ${fmt(sun)}`;
+  }
+  function getISOWeek(date){
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+    return {year: d.getUTCFullYear(), week: weekNo};
+  }
+  function isoWeekToDate(year, week){
+    const simple = new Date(Date.UTC(year,0,1 + (week-1)*7));
+    const dow = simple.getUTCDay();
+    const ISOweekStart = simple;
+    if (dow <= 4)
+        ISOweekStart.setUTCDate(simple.getUTCDate() - simple.getUTCDay() + 1);
+    else
+        ISOweekStart.setUTCDate(simple.getUTCDate() + 8 - simple.getUTCDay());
+    return ISOweekStart; // Monday
+  }
+
+  // ===== Data layer (localStorage) =====
+  const KEY = 'stunden-tracker-v1';
+  const db = {
+    load(){
+      try{ return JSON.parse(localStorage.getItem(KEY)) || {daysDisabled:{}, entries:{}} }catch{ return {daysDisabled:{}, entries:{}} }
+    },
+    save(state){ localStorage.setItem(KEY, JSON.stringify(state)); },
+    keyFor(year,week,day,period){ return `${year}-W${String(week).padStart(2,'0')}:${day}:${period}` }
+  };
+
+  // ===== State =====
+  const state = { admin:false, year:0, week:0, mon:new Date(), data: db.load() };
+
+  // ===== Build UI =====
+  const gridEl = document.getElementById('grid');
+  const tpl = document.getElementById('gridTpl');
+  const dateBtn = document.getElementById('dateBtn');
+  const prevBtn = document.getElementById('prevWeek');
+  const nextBtn = document.getElementById('nextWeek');
+  const adminToggle = document.getElementById('adminToggle');
+
+  function init(){
+    const start = startOfISOWeek(new Date());
+    const {year, week} = getISOWeek(start);
+    state.year = year; state.week = week; state.mon = start;
+    adminToggle.checked = state.admin;
+    render();
+    bindToolbar();
+    buildWeekPicker();
+  }
+
+  function bindToolbar(){
+    prevBtn.addEventListener('click', ()=>{ goWeek(-1) });
+    nextBtn.addEventListener('click', ()=>{ goWeek(+1) });
+    dateBtn.addEventListener('click', ()=>{ openWeekPicker() });
+    adminToggle.addEventListener('change', ()=>{ state.admin = adminToggle.checked; render() });
+  }
+
+  function goWeek(delta){
+    state.mon = addWeeks(state.mon, delta);
+    const {year, week} = getISOWeek(state.mon);
+    state.year = year; state.week = week;
+    render();
+  }
+
+  function render(){
+    // header date text
+    dateBtn.textContent = `KW ${String(state.week).padStart(2,'0')} · ${formatRange(state.mon)}`;
+
+    gridEl.innerHTML = '';
+    const frag = tpl.content.cloneNode(true);
+    const body = frag.querySelector('.gridBody');
+
+    // Build 10 Stunden (1–10), 5 Tage (Mo–Fr)
+    for(let period=1; period<=10; period++){
+      const row = document.createElement('div');
+      row.className = 'gridRow';
+
+      const c0 = document.createElement('div'); c0.className='cell period'; c0.textContent = `${period}. Std.`; row.appendChild(c0);
+
+      for(let day=1; day<=5; day++){
+        const c = document.createElement('div'); c.className='cell';
+        const entryKey = db.keyFor(state.year, state.week, day, period);
+        const entry = state.data.entries[entryKey];
+        const dayDisabled = !!state.data.daysDisabled[`${state.year}-W${String(state.week).padStart(2,'0')}:${day}`];
+
+        const el = document.createElement('div'); el.className='lesson'; el.dataset.key = entryKey; if(dayDisabled) el.setAttribute('disabled','');
+        const dot = document.createElement('span'); dot.className='dot'; dot.style.background = entry?.color || '#8892b0';
+        const text = document.createElement('div'); text.className='summary';
+        const good = entry?.good ? `✅ ${entry.good}` : '';
+        const bad = entry?.bad ? `❌ ${entry.bad}` : '';
+        const comment = entry?.comment ? `💬 ${entry.comment}` : '';
+        text.innerHTML = `<span>${good || bad || comment ? '' : '<span class="badge">(leer)</span>'}</span>`;
+        if(good) text.append(` ${good}`);
+        if(bad) text.append(`  ${bad}`);
+        if(comment) text.append(`  ${comment}`);
+        el.append(dot, text);
+        el.addEventListener('click', ()=> openDetail(entryKey, day, period));
+        c.appendChild(el);
+        row.appendChild(c);
+      }
+      body.appendChild(row);
+    }
+
+    gridEl.appendChild(frag);
+
+    // Update day headers disabled style
+    const head = gridEl.querySelector('.gridHead');
+    [...head.children].forEach((hc,i)=>{
+      if(i===0) return;
+      const day = i; // 1..5
+      const dis = !!state.data.daysDisabled[`${state.year}-W${String(state.week).padStart(2,'0')}:${day}`];
+      hc.style.opacity = dis ? .5 : 1;
+      hc.style.textDecoration = dis ? 'line-through' : 'none';
+      if(state.admin){
+        hc.style.cursor = 'pointer';
+        hc.title = dis ? 'Tag aktivieren' : 'Tag deaktivieren';
+        hc.onclick = ()=>{
+          state.data.daysDisabled[`${state.year}-W${String(state.week).padStart(2,'0')}:${day}`] = !dis;
+          db.save(state.data); render();
+        };
+      }else{
+        hc.onclick = null; hc.removeAttribute('title');
+      }
+    });
+  }
+
+  // ===== Detail dialog =====
+  const detail = document.getElementById('detail');
+  const inpGood = document.getElementById('inpGood');
+  const inpBad = document.getElementById('inpBad');
+  const inpComment = document.getElementById('inpComment');
+  const inpMood = document.getElementById('inpMood');
+  const inpColor = document.getElementById('inpColor');
+  const inpDisabled = document.getElementById('inpDisabled');
+  const btnSave = document.getElementById('btnSave');
+  const btnDelete = document.getElementById('btnDelete');
+  const viewBadge = document.getElementById('viewBadge');
+  const detailTitle = document.getElementById('detailTitle');
+
+  detail.addEventListener('click', (e)=>{ if(e.target.dataset.close !== undefined) detail.close(); });
+  detail.querySelectorAll('[data-close]').forEach(b=> b.addEventListener('click', ()=> detail.close()));
+
+  function openDetail(key, day, period){
+    const entry = state.data.entries[key] || {};
+    const dayDisKey = `${state.year}-W${String(state.week).padStart(2,'0')}:${day}`;
+    detailTitle.textContent = `${['','Montag','Dienstag','Mittwoch','Donnerstag','Freitag'][day]}, ${period}. Stunde`;
+
+    // Fill
+    inpGood.value = entry.good || '';
+    inpBad.value = entry.bad || '';
+    inpComment.value = entry.comment || '';
+    inpMood.value = entry.mood ?? 50;
+    inpColor.value = entry.color || '#7c9cff';
+    inpDisabled.checked = !!state.data.daysDisabled[dayDisKey];
+
+    // Admin vs View
+    const ro = !state.admin;
+    [inpGood,inpBad,inpComment,inpMood,inpColor,inpDisabled].forEach(i=>{ i.disabled = ro; i.style.opacity = ro? .7 : 1; });
+    btnSave.style.display = state.admin ? '' : 'none';
+    btnDelete.style.display = state.admin ? '' : 'none';
+    viewBadge.textContent = state.admin ? 'Bearbeiten' : 'Ansicht';
+
+    // Bind actions
+    btnSave.onclick = ()=>{
+      state.data.entries[key] = {
+        good: inpGood.value.trim(),
+        bad: inpBad.value.trim(),
+        comment: inpComment.value.trim(),
+        mood: Number(inpMood.value),
+        color: inpColor.value
+      };
+      state.data.daysDisabled[dayDisKey] = !!inpDisabled.checked;
+      db.save(state.data); detail.close(); render();
+    };
+    btnDelete.onclick = ()=>{
+      delete state.data.entries[key];
+      db.save(state.data); detail.close(); render();
+    };
+
+    detail.showModal();
+  }
+
+  // ===== Week picker =====
+  const weekPicker = document.getElementById('weekPicker');
+  const wkYear = document.getElementById('wkYear');
+  const wkNumber = document.getElementById('wkNumber');
+  const quickWeeks = document.getElementById('quickWeeks');
+  const wkGo = document.getElementById('wkGo');
+
+  weekPicker.addEventListener('click', (e)=>{ if(e.target.dataset.close !== undefined) weekPicker.close(); });
+
+  function buildWeekPicker(){
+    // Years around current
+    const yNow = new Date().getFullYear();
+    for(let y=yNow-2; y<=yNow+2; y++){
+      const opt = document.createElement('option'); opt.value = y; opt.textContent = y; wkYear.appendChild(opt);
+    }
+    wkYear.value = state.year;
+    fillWeekNumbers();
+    wkNumber.value = String(state.week);
+
+    wkYear.onchange = fillWeekNumbers;
+    wkGo.onclick = ()=>{
+      const y = Number(wkYear.value); const w = Number(wkNumber.value);
+      state.mon = isoWeekToDate(y,w); state.year = y; state.week = w; weekPicker.close(); render();
+    };
+
+    // Quick list: last 6, next 6
+    quickWeeks.innerHTML='';
+    const baseMon = startOfISOWeek(new Date());
+    for(let i= -6; i<=6; i++){
+      const m = addWeeks(baseMon, i);
+      const {year, week} = getISOWeek(m);
+      const it = document.createElement('div'); it.className='weekItem';
+      if(year===state.year && week===state.week) it.classList.add('active');
+      it.textContent = `KW ${String(week).padStart(2,'0')} · ${formatRange(m)}`;
+      it.onclick = ()=>{ state.mon=m; state.year=year; state.week=week; weekPicker.close(); render(); };
+      quickWeeks.appendChild(it);
+    }
+  }
+  function fillWeekNumbers(){
+    wkNumber.innerHTML='';
+    // assume 52 weeks (some years 53). Compute last week of year
+    const last = getISOWeek(new Date(Date.UTC(Number(wkYear.value),11,28))).week; // 28 Dec always in last ISO week
+    for(let w=1; w<=last; w++){
+      const opt = document.createElement('option'); opt.value = w; opt.textContent = `KW ${String(w).padStart(2,'0')}`; wkNumber.appendChild(opt);
+    }
+  }
+  function openWeekPicker(){
+    wkYear.value = state.year; fillWeekNumbers(); wkNumber.value = String(state.week);
+    // refresh quick list to reflect current selection
+    buildWeekPicker();
+    weekPicker.showModal();
+  }
+
+  // ===== Kick off =====
+  init();
+  </script>
+</body>
+</html>
